@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Super Kart Racing - Mario Kart Style</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    color: #fff;
+  }
+  #gameContainer {
+    position: relative;
+    width: 960px;
+    height: 600px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    background: #2d5a27;
+  }
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+  }
+  .hud-box {
+    background: rgba(0,0,0,0.55);
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 2px solid rgba(255,255,255,0.2);
+  }
+  #positionBox { font-size: 28px; color: #ffd700; }
+  #lapBox { font-size: 18px; }
+  #speedBox { font-size: 18px; color: #00e5ff; }
+  #itemBox {
+    font-size: 16px;
+    min-width: 120px;
+    text-align: center;
+  }
+  #itemBox .item-icon {
+    font-size: 32px;
+    display: block;
+    margin-top: 4px;
+  }
+  /* Overlays */
+  .overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    text-align: center;
+    padding: 20px;
+  }
+  .overlay h1 {
+    font-size: 52px;
+    background: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 10px;
+    letter-spacing: 2px;
+  }
+  .overlay h2 { font-size: 36px; margin-bottom: 20px; color: #ffd700; }
+  .overlay p { font-size: 18px; margin: 6px 0; color: #ccc; max-width: 600px; line-height: 1.6; }
+  .controls-info {
+    background: rgba(255,255,255,0.08);
+    padding: 16px 24px;
+    border-radius: 10px;
+    margin: 16px 0;
+    text-align: left;
+  }
+  .controls-info span { color: #ffd700; font-weight: bold; }
+  .btn {
+    margin-top: 20px;
+    padding: 14px 40px;
+    font-size: 22px;
+    font-weight: bold;
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+    color: white;
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(238,90,36,0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+    pointer-events: auto;
+  }
+  .btn:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(238,90,36,0.6); }
+  #countdown {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 120px;
+    font-weight: 900;
+    color: #ffd700;
+    text-shadow: 0 0 30px rgba(255,215,0,0.8), 4px 4px 0 #c0392b;
+    z-index: 5;
+    pointer-events: none;
+    display: none;
+  }
+  #resultsList {
+    background: rgba(255,255,255,0.08);
+    padding: 20px 40px;
+    border-radius: 12px;
+    margin: 10px 0;
+    font-size: 20px;
+    text-align: left;
+    min-width: 320px;
+  }
+  #resultsList div { padding: 6px 0; display: flex; justify-content: space-between; gap: 30px; }
+  .pos-1 { color: #ffd700; } .pos-2 { color: #c0c0c0; } .pos-3 { color: #cd7f32; } .pos-4 { color: #888; }
+  .hidden { display: none !important; }
+  #raceMsg {
+    position: absolute;
+    top: 80px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 28px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 2px 2px 6px rgba(0,0,0,0.9);
+    z-index: 4;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="game" width="960" height="600"></canvas>
+
+  <div id="hud">
+    <div class="hud-box" id="positionBox">4º / 4</div>
+    <div class="hud-box" id="lapBox">Vuelta 1/3</div>
+    <div class="hud-box" id="itemBox">Item<span class="item-icon">-</span></div>
+    <div class="hud-box" id="speedBox">0 km/h</div>
+  </div>
+
+  <div id="raceMsg"></div>
+  <div id="countdown"></div>
+
+  <div class="overlay" id="startScreen">
+    <h1>SUPER KART RACING</h1>
+    <p>Un juego de carreras estilo Mario Kart hecho con HTML5 Canvas</p>
+    <div class="controls-info">
+      <p><span>↑ / W</span> — Acelerar</p>
+      <p><span>↓ / S</span> — Frenar / Marcha atrás</p>
+      <p><span>← → / A D</span> — Girar</p>
+      <p><span>Shift</span> — Derrape (drift) — suelta para mini-turbo</p>
+      <p><span>Espacio</span> — Usar ítem</p>
+      <p><span>R</span> — Reiniciar carrera</p>
+    </div>
+    <p>Recoge las <span style="color:#ffd700">cajas de ítems</span>, usa hongos para turbo, plátanos para hacer resbalar rivales y caparazones para atacar. ¡3 vueltas a la pista!</p>
+    <button class="btn" id="startBtn">¡EMPEZAR CARRERA!</button>
+  </div>
+
+  <div class="overlay hidden" id="finishScreen">
+    <h2 id="finishTitle">¡Carrera terminada!</h2>
+    <div id="resultsList"></div>
+    <button class="btn" id="restartBtn">CORRER DE NUEVO</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SUPER KART RACING — Mario Kart style 2D racing game
+// ============================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ---------- Track definition ----------
+// Control points forming a closed loop (circuit)
+const controlPoints = [
+  {x: 1200, y: 600}, {x: 1600, y: 500}, {x: 1900, y: 650}, {x: 2000, y: 950},
+  {x: 1900, y: 1250}, {x: 1600, y: 1400}, {x: 1200, y: 1450}, {x: 900, y: 1350},
+  {x: 700, y: 1100}, {x: 650, y: 800}, {x: 850, y: 550}
+];
+const TRACK_WIDTH = 170;
+const SAMPLES = 440;
+let track = []; // sampled centerline {x, y, angle}
+
+function buildTrack() {
+  track = [];
+  const n = controlPoints.length;
+  for (let i = 0; i < SAMPLES; i++) {
+    const t = (i / SAMPLES) * n;
+    const idx = Math.floor(t) % n;
+    const frac = t - Math.floor(t);
+    const p0 = controlPoints[(idx - 1 + n) % n];
+    const p1 = controlPoints[idx];
+    const p2 = controlPoints[(idx + 1) % n];
+    const p3 = controlPoints[(idx + 2) % n];
+    // Catmull-Rom interpolation
+    const t2 = frac * frac, t3 = t2 * frac;
+    const x = 0.5 * ((2*p1.x) + (-p0.x + p2.x)*frac + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*t2 + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*t3);
+    const y = 0.5 * ((2*p1.y) + (-p0.y + p2.y)*frac + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*t2 + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*t3);
+    track.push({x, y});
+  }
+  // compute angles
+  for (let i = 0; i < SAMPLES; i++) {
+    const a = track[i], b = track[(i+1)%SAMPLES];
+    a.angle = Math.atan2(b.y - a.y, b.x - a.x);
+  }
+}
+buildTrack();
+
+// Find nearest track index to a point (search around a given index window)
+function nearestTrackIndex(x, y, aroundIdx, window) {
+  let best = aroundIdx, bestD = Infinity;
+  const w = window || 60;
+  for (let off = -w; off <= w; off++) {
+    const i = ((aroundIdx + off) % SAMPLES + SAMPLES) % SAMPLES;
+    const dx = track[i].x - x, dy = track[i].y - y;
+    const d = dx*dx + dy*dy;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return { idx: best, dist: Math.sqrt(bestD), point: track[best] };
+}
+
+// ---------- Item box positions (along track) ----------
+const itemBoxIndices = [30, 140, 250, 360];
+let itemBoxes = [];
+function resetItemBoxes() {
+  itemBoxes = itemBoxIndices.map(idx => ({ idx, x: track[idx].x, y: track[idx].y, active: true, respawn: 0 }));
+}
+
+// ---------- Kart class ----------
+const KART_COLORS = ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71'];
+const KART_NAMES = ['Tú (Rojo)', 'Azul Marino', 'Amarillo Turbo', 'Verde Rayo'];
+
+class Kart {
+  constructor(index, isPlayer) {
+    this.index = index;
+    this.isPlayer = isPlayer;
+    this.color = KART_COLORS[index];
+    this.name = KART_NAMES[index];
+    this.reset();
+  }
+  reset() {
+    // place on start line (track index 0), staggered
+    const startIdx = 0;
+    const sp = track[startIdx];
+    const perp = sp.angle + Math.PI/2;
+    const row = Math.floor(this.index / 2);
+    const col = this.index % 2;
+    const back = -row * 50;
+    const side = (col === 0 ? -1 : 1) * 45;
+    this.x = sp.x + Math.cos(perp) * side + Math.cos(sp.angle) * back;
+    this.y = sp.y + Math.sin(perp) * side + Math.sin(sp.angle) * back;
+    this.angle = sp.angle;
+    this.speed = 0;
+    this.maxSpeed = 5.2;
+    this.accel = 0.12;
+    this.friction = 0.04;
+    this.turnSpeed = 0.055;
+    this.trackIdx = startIdx;
+    this.lap = 0;
+    this.nextCheckpoint = 1;
+    this.finished = false;
+    this.finishTime = 0;
+    this.item = null;
+    this.spinOut = 0; // frames of spin-out control loss
+    this.boost = 0; // frames of speed boost
+    this.drifting = false;
+    this.driftDir = 0;
+    this.driftTime = 0;
+    this.aiTargetOffset = 40 + this.index * 8; // lookahead
+    this.aiSkill = 0.85 + Math.random() * 0.1;
+  }
+  get effectiveMaxSpeed() {
+    let s = this.maxSpeed;
+    if (this.boost > 0) s *= 1.6;
+    // off-road slowdown
+    const near = nearestTrackIndex(this.x, this.y, this.trackIdx, 80);
+    if (near.dist > TRACK_WIDTH/2) s *= 0.45;
+    return s;
+  }
+  update(input, shells, bananas, particles) {
+    if (this.finished) { this.speed *= 0.95; }
+    const near = nearestTrackIndex(this.x, this.y, this.trackIdx, 80);
+    this.trackIdx = near.idx;
+    const offRoad = near.dist > TRACK_WIDTH/2;
+
+    // Spin-out handling
+    if (this.spinOut > 0) {
+      this.spinOut--;
+      this.angle += 0.15;
+      this.speed *= 0.92;
+    } else if (!this.finished) {
+      // Acceleration
+      if (input.up) this.speed += this.accel;
+      else if (input.down) this.speed -= this.accel * 0.7;
+      else this.speed *= (1 - this.friction);
+
+      const maxS = this.effectiveMaxSpeed;
+      if (this.speed > maxS) this.speed = maxS;
+      if (this.speed < -maxS * 0.4) this.speed = -maxS * 0.4;
+
+      // Steering (only when moving)
+      const steerFactor = Math.min(Math.abs(this.speed) / 2, 1);
+      let turn = 0;
+      if (input.left) turn -= this.turnSpeed * steerFactor;
+      if (input.right) turn += this.turnSpeed * steerFactor;
+
+      // Drift mechanics
+      if (input.drift && Math.abs(this.speed) > 2 && (input.left || input.right)) {
+        if (!this.drifting) { this.drifting = true; this.driftDir = input.left ? -1 : 1; this.driftTime = 0; }
+        this.driftTime++;
+        turn = this.driftDir * this.turnSpeed * 1.4 * steerFactor;
+        this.angle += turn * 0.6;
+        // drift particles
+        if (Math.random() < 0.5) particles.push(new Particle(this.x - Math.cos(this.angle)*12, this.y - Math.sin(this.angle)*12, '#ddd', 20));
+      } else {
+        if (this.drifting && this.driftTime > 40) {
+          this.boost = Math.min(this.boost + 50, 90); // mini-turbo
+          for (let i = 0; i < 10; i++) particles.push(new Particle(this.x, this.y, '#ff6b00', 30));
+        }
+        this.drifting = false;
+        this.driftTime = 0;
+        this.angle += turn;
+      }
+    }
+
+    if (this.boost > 0) {
+      this.boost--;
+      if (Math.random() < 0.6) particles.push(new Particle(this.x - Math.cos(this.angle)*14, this.y - Math.sin(this.angle)*14, '#ffaa00', 25));
+    }
+
+    // Move
+    this.x += Math.cos(this.angle) * this.speed;
+    this.y += Math.sin(this.angle) * this.speed;
+
+    // Off-road dust
+    if (offRoad && Math.abs(this.speed) > 1 && Math.random() < 0.3) {
+      particles.push(new Particle(this.x, this.y, '#8B6914', 25));
+    }
+
+    // Checkpoint / lap logic
+    const CHECKPOINT_STEP = Math.floor(SAMPLES / 6);
+    const targetIdx = this.nextCheckpoint * CHECKPOINT_STEP;
+    if (Math.abs(this.trackIdx - targetIdx) < 15 || (this.trackIdx > SAMPLES - 15 && targetIdx < 15)) {
+      this.nextCheckpoint++;
+      if (this.nextCheckpoint >= 6) {
+        this.nextCheckpoint = 0;
+        this.lap++;
+        if (this.lap >= 3) {
+          this.finished = true;
+          this.finishTime = raceTime;
+        }
+      }
+    }
+
+    // Item box pickup
+    for (const box of itemBoxes) {
+      if (box.active && Math.hypot(box.x - this.x, box.y - this.y) < 35) {
+        box.active = false;
+        box.respawn = 180;
+        if (this.isPlayer && !this.item) {
+          this.item = randomItem();
+          showItem(this.item);
+        } else if (!this.isPlayer && !this.item) {
+          this.item = randomItem();
+        }
+      }
+    }
+
+    // AI uses items sometimes
+    if (!this.isPlayer && this.item && Math.random() < 0.01) {
+      useItem(this, shells, bananas, particles);
+    }
+
+    // Banana collision
+    for (const b of bananas) {
+      if (!b.hit && Math.hypot(b.x - this.x, b.y - this.y) < 22) {
+        b.hit = true;
+        this.spinOut = 70;
+        this.speed *= 0.3;
+        for (let i = 0; i < 15; i++) particles.push(new Particle(this.x, this.y, '#fff', 30));
+      }
+    }
+  }
+  draw(ctx, camX, camY) {
+    const sx = this.x - camX, sy = this.y - camY;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(this.angle);
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(2, 3, 18, 12, 0, 0, Math.PI*2); ctx.fill();
+    // kart body
+    ctx.fillStyle = this.color;
+    ctx.fillRect(-14, -9, 28, 18);
+    // nose
+    ctx.fillStyle = this.darken(this.color);
+    ctx.fillRect(10, -7, 6, 14);
+    // wheels
+    ctx.fillStyle = '#222';
+    ctx.fillRect(-12, -12, 8, 4);
+    ctx.fillRect(-12, 8, 8, 4);
+    ctx.fillRect(6, -12, 8, 4);
+    ctx.fillRect(6, 8, 8, 4);
+    // driver helmet
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#333';
+    ctx.fillRect(2, -3, 5, 6);
+    // boost flames
+    if (this.boost > 0) {
+      ctx.fillStyle = '#ff6600';
+      ctx.beginPath();
+      ctx.moveTo(-14, -5); ctx.lineTo(-14 - 12 - Math.random()*8, 0); ctx.lineTo(-14, 5);
+      ctx.fill();
+    }
+    // drift sparks
+    if (this.drifting && this.driftTime > 40) {
+      ctx.fillStyle = '#00e5ff';
+      ctx.beginPath(); ctx.arc(-12, this.driftDir*9, 4, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  darken(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, ((n>>16)&255) - 50), g = Math.max(0, ((n>>8)&255) - 50), b = Math.max(0, (n&255) - 50);
+    return `rgb(${r},${g},${b})`;
+  }
+}
+
+// ---------- Items ----------
+const ITEMS = ['mushroom', 'banana', 'shell'];
+const ITEM_ICONS = { mushroom: '🍄', banana: '🍌', shell: '🐢' };
+const ITEM_NAMES = { mushroom: 'Hongo Turbo', banana: 'Plátano', shell: 'Caparazón' };
+function randomItem() { return ITEMS[Math.floor(Math.random() * ITEMS.length)]; }
+
+function useItem(kart, shells, bananas, particles) {
+  if (!kart.item) return;
+  if (kart.item === 'mushroom') {
+    kart.boost = Math.min(kart.boost + 90, 120);
+    for (let i = 0; i < 15; i++) particles.push(new Particle(kart.x, kart.y, '#ff4444', 35));
+  } else if (kart.item === 'banana') {
+    bananas.push({
+      x: kart.x - Math.cos(kart.angle) * 25,
+      y: kart.y - Math.sin(kart.angle) * 25,
+      hit: false, life: 600
+    });
+  } else if (kart.item === 'shell') {
+    shells.push({
+      x: kart.x + Math.cos(kart.angle) * 20,
+      y: kart.y + Math.sin(kart.angle) * 20,
+      vx: Math.cos(kart.angle) * 7,
+      vy: Math.sin(kart.angle) * 7,
+      life: 300,
+      owner: kart.index
+    });
+  }
+  kart.item = null;
+  if (kart.isPlayer) showItem(null);
+}
+
+// ---------- Particles ----------
+class Particle {
+  constructor(x, y, color, life) {
+    this.x = x; this.y = y; this.color = color; this.life = life;
+    this.maxLife = life;
+    this.vx = (Math.random()-0.5)*2; this.vy = (Math.random()-0.5)*2;
+    this.size = 2 + Math.random()*3;
+  }
+  update() { this.x += this.vx; this.y += this.vy; this.life--; }
+  draw(ctx, camX, camY) {
+    ctx.globalAlpha = this.life / this.maxLife;
+    ctx.fillStyle = this.color;
+    ctx.beginPath(); ctx.arc(this.x - camX, this.y - camY, this.size, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ---------- Game state ----------
+let karts = [];
+let shells = [];
+let bananas = [];
+let particles = [];
+let raceTime = 0;
+let gameState = 'menu'; // menu, countdown, racing, finished
+let countdownTimer = 0;
+let camera = { x: 0, y: 0 };
+
+function initRace() {
+  karts = [new Kart(0, true), new Kart(1, false), new Kart(2, false), new Kart(3, false)];
+  shells = []; bananas = []; particles = [];
+  resetItemBoxes();
+  raceTime = 0;
+  countdownTimer = 180; // 3 seconds at 60fps
+  gameState = 'countdown';
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('finishScreen').classList.add('hidden');
+  document.getElementById('countdown').style.display = 'block';
+  showItem(null);
+}
+
+// ---------- Input ----------
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === ' ') { e.preventDefault(); usePlayerItem(); }
+  if (e.key.toLowerCase() === 'r') initRace();
+});
+document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+function getPlayerInput() {
+  return {
+    up: keys['arrowup'] || keys['w'],
+    down: keys['arrowdown'] || keys['s'],
+    left: keys['arrowleft'] || keys['a'],
+    right: keys['arrowright'] || keys['d'],
+    drift: keys['shift']
+  };
+}
+
+function usePlayerItem() {
+  if (gameState !== 'racing') return;
+  const p = karts[0];
+  if (p && p.item) useItem(p, shells, bananas, particles);
+}
+
+// ---------- AI ----------
+function getAIInput(kart) {
+  const targetIdx = (kart.trackIdx + kart.aiTargetOffset) % SAMPLES;
+  const target = track[targetIdx];
+  const desiredAngle = Math.atan2(target.y - kart.y, target.x - kart.x);
+  let diff = desiredAngle - kart.angle;
+  while (diff > Math.PI) diff -= Math.PI*2;
+  while (diff < -Math.PI) diff += Math.PI*2;
+  return {
+    up: true,
+    down: Math.abs(diff) > 1.2,
+    left: diff < -0.05,
+    right: diff > 0.05,
+    drift: Math.abs(diff) > 0.5 && Math.random() < 0.3 * kart.aiSkill
+  };
+}
+
+// ---------- Update ----------
+function update() {
+  if (gameState === 'countdown') {
+    countdownTimer--;
+    const cd = document.getElementById('countdown');
+    if (countdownTimer > 120) cd.textContent = '3';
+    else if (countdownTimer > 60) cd.textContent = '2';
+    else if (countdownTimer > 0) cd.textContent = '1';
+    else { cd.textContent = '¡GO!'; }
+    if (countdownTimer <= -30) {
+      cd.style.display = 'none';
+      gameState = 'racing';
+    }
+    return;
+  }
+  if (gameState !== 'racing') return;
+  raceTime++;
+
+  // Update karts
+  for (const k of karts) {
+    const input = k.isPlayer ? getPlayerInput() : getAIInput(k);
+    k.update(input, shells, bananas, particles);
+  }
+
+  // Kart-kart collision (simple push apart)
+  for (let i = 0; i < karts.length; i++) {
+    for (let j = i+1; j < karts.length; j++) {
+      const a = karts[i], b = karts[j];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 28 && d > 0) {
+        const overlap = (28 - d) / 2;
+        const nx = dx/d, ny = dy/d;
+        a.x -= nx*overlap; a.y -= ny*overlap;
+        b.x += nx*overlap; b.y += ny*overlap;
+        a.speed *= 0.9; b.speed *= 0.9;
+      }
+    }
+  }
+
+  // Update shells
+  for (const s of shells) {
+    s.x += s.vx; s.y += s.vy; s.life--;
+    // bounce off track edges (simple: if far from center, reflect)
+    const near = nearestTrackIndex(s.x, s.y, 0, SAMPLES);
+    if (near.dist > TRACK_WIDTH/2 + 20) {
+      // reflect roughly
+      const nx = (s.x - near.point.x) / near.dist;
+      const ny = (s.y - near.point.y) / near.dist;
+      const dot = s.vx*nx + s.vy*ny;
+      s.vx -= 2*dot*nx; s.vy -= 2*dot*ny;
+    }
+    // hit karts
+    for (const k of karts) {
+      if (k.index === s.owner) continue;
+      if (Math.hypot(s.x - k.x, s.y - k.y) < 20) {
+        k.spinOut = 70; k.speed *= 0.3;
+        s.life = 0;
+        for (let i = 0; i < 12; i++) particles.push(new Particle(k.x, k.y, '#4CAF50', 30));
+      }
+    }
+  }
+  shells = shells.filter(s => s.life > 0);
+
+  // Update bananas
+  for (const b of bananas) b.life--;
+  bananas = bananas.filter(b => b.life > 0 && !b.hit);
+
+  // Item box respawn
+  for (const box of itemBoxes) {
+    if (!box.active) { box.respawn--; if (box.respawn <= 0) box.active = true; }
+  }
+
+  // Particles
+  for (const p of particles) p.update();
+  particles = particles.filter(p => p.life > 0);
+
+  // Camera follows player
+  const p = karts[0];
+  camera.x += (p.x - W/2 - camera.x) * 0.1;
+  camera.y += (p.y - H/2 - camera.y) * 0.1;
+
+  // Check race finish
+  const allDone = karts.every(k => k.finished) || raceTime > 60*60*5; // 5 min max
+  const playerDone = p.finished;
+  if (allDone || (playerDone && raceTime > 180)) {
+    finishRace();
+  }
+
+  updateHUD();
+}
+
+// ---------- HUD ----------
+function updateHUD() {
+  const p = karts[0];
+  // position
+  const sorted = [...karts].sort((a, b) => {
+    const pa = a.lap * SAMPLES + a.trackIdx + (a.finished ? SAMPLES*3 : 0);
+    const pb = b.lap * SAMPLES + b.trackIdx + (b.finished ? SAMPLES*3 : 0);
+    return pb - pa;
+  });
+  const pos = sorted.indexOf(p) + 1;
+  const posNames = ['1º','2º','3º','4º'];
+  document.getElementById('positionBox').textContent = `${posNames[pos-1]} / 4`;
+  document.getElementById('lapBox').textContent = `Vuelta ${Math.min(p.lap+1, 3)}/3`;
+  const kmh = Math.round(Math.abs(p.speed) * 30);
+  document.getElementById('speedBox').textContent = `${kmh} km/h`;
+}
+
+function showItem(item) {
+  const box = document.getElementById('itemBox');
+  if (item) {
+    box.innerHTML = `${ITEM_NAMES[item]}<span class="item-icon">${ITEM_ICONS[item]}</span>`;
+  } else {
+    box.innerHTML = `Sin ítem<span class="item-icon">-</span>`;
+  }
+}
+
+function showMsg(text, duration) {
+  const el = document.getElementById('raceMsg');
+  el.textContent = text;
+  el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, duration || 1500);
+}
+
+// ---------- Finish ----------
+function finishRace() {
+  if (gameState === 'finished') return;
+  gameState = 'finished';
+  const sorted = [...karts].sort((a, b) => {
+    if (a.finished && b.finished) return a.finishTime - b.finishTime;
+    if (a.finished) return -1;
+    if (b.finished) return 1;
+    return (b.lap*SAMPLES + b.trackIdx) - (a.lap*SAMPLES + a.trackIdx);
+  });
+  const playerPos = sorted.indexOf(karts[0]) + 1;
+  const titles = ['¡¡¡GANASTE!!! 🎉', '¡Segundo puesto! 🥈', 'Tercer puesto 🥉', '¡Sigue intentándolo! 💪'];
+  document.getElementById('finishTitle').textContent = titles[playerPos-1];
+  const list = document.getElementById('resultsList');
+  list.innerHTML = sorted.map((k, i) => {
+    const cls = ['pos-1','pos-2','pos-3','pos-4'][i];
+    const time = k.finished ? `${(k.finishTime/60).toFixed(1)}s` : 'DNF';
+    return `<div class="${cls}"><span>${i+1}. ${k.name}</span><span>${time}</span></div>`;
+  }).join('');
+  document.getElementById('finishScreen').classList.remove('hidden');
+}
+
+// ---------- Render ----------
+function drawTrack() {
+  // Grass background pattern
+  ctx.fillStyle = '#2d5a27';
+  ctx.fillRect(0, 0, W, H);
+  // Grass texture dots
+  ctx.fillStyle = '#357a2e';
+  for (let i = 0; i < 60; i++) {
+    const gx = ((i * 137 + camera.x*0.3) % (W+40)) - 20;
+    const gy = ((i * 211 + camera.y*0.3) % (H+40)) - 20;
+    ctx.fillRect(gx, gy, 3, 3);
+  }
+
+  ctx.save();
+  ctx.translate(-camera.x, -camera.y);
+
+  // Draw track as thick stroked path
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // Outer edge (white border)
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = TRACK_WIDTH + 12;
+  ctx.beginPath();
+  ctx.moveTo(track[0].x, track[0].y);
+  for (let i = 1; i < SAMPLES; i++) ctx.lineTo(track[i].x, track[i].y);
+  ctx.closePath();
+  ctx.stroke();
+  // Road surface
+  ctx.strokeStyle = '#4a4a4a';
+  ctx.lineWidth = TRACK_WIDTH;
+  ctx.beginPath();
+  ctx.moveTo(track[0].x, track[0].y);
+  for (let i = 1; i < SAMPLES; i++) ctx.lineTo(track[i].x, track[i].y);
+  ctx.closePath();
+  ctx.stroke();
+  // Center dashed line
+  ctx.strokeStyle = '#ffd700';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([20, 20]);
+  ctx.beginPath();
+  ctx.moveTo(track[0].x, track[0].y);
+  for (let i = 1; i < SAMPLES; i++) ctx.lineTo(track[i].x, track[i].y);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Start/finish line (checkered)
+  const sp = track[0];
+  const perp = sp.angle + Math.PI/2;
+  for (let i = -4; i < 4; i++) {
+    for (let j = 0; j < 2; j++) {
+      ctx.fillStyle = (i + j) % 2 === 0 ? '#000' : '#fff';
+      const bx = sp.x + Math.cos(perp) * (i * 12) + Math.cos(sp.angle) * (j * 10 - 5);
+      const by = sp.y + Math.sin(perp) * (i * 12) + Math.sin(sp.angle) * (j * 10 - 5);
+      ctx.fillRect(bx - 6, by - 6, 12, 12);
+    }
+  }
+
+  // Item boxes
+  for (const box of itemBoxes) {
+    if (!box.active) continue;
+    const bob = Math.sin(raceTime * 0.1 + box.idx) * 3;
+    ctx.save();
+    ctx.translate(box.x, box.y + bob);
+    ctx.rotate(raceTime * 0.02);
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(-14, -14, 28, 28);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-10, -10, 20, 20);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', 0, 1);
+    ctx.restore();
+    // glow
+    ctx.strokeStyle = 'rgba(255,215,0,0.4)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(box.x, box.y, 22 + Math.sin(raceTime*0.1)*3, 0, Math.PI*2); ctx.stroke();
+  }
+
+  // Bananas
+  for (const b of bananas) {
+    ctx.fillStyle = '#f1c40f';
+    ctx.beginPath(); ctx.ellipse(b.x, b.y, 12, 6, 0.5, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#b7950b'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // Shells
+  for (const s of shells) {
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(raceTime * 0.3);
+    ctx.fillStyle = '#2ecc71';
+    ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // Karts (draw player last = on top)
+  const sorted = [...karts].sort((a, b) => a.y - b.y);
+  for (const k of sorted) k.draw(ctx, 0, 0);
+
+  // Particles
+  for (const p of particles) p.draw(ctx, 0, 0);
+
+  ctx.restore();
+
+  // Minimap
+  drawMinimap();
+}
+
+function drawMinimap() {
+  const mw = 140, mh = 110;
+  const mx = W - mw - 15, my = H - mh - 15;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(mx, my, mw, mh);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.strokeRect(mx, my, mw, mh);
+  // find bounds
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const t of track) {
+    minX = Math.min(minX, t.x); maxX = Math.max(maxX, t.x);
+    minY = Math.min(minY, t.y); maxY = Math.max(maxY, t.y);
+  }
+  const scale = Math.min((mw-20)/(maxX-minX), (mh-20)/(maxY-minY));
+  const ox = mx + (mw - (maxX-minX)*scale)/2 - minX*scale;
+  const oy = my + (mh - (maxY-minY)*scale)/2 - minY*scale;
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(ox + track[0].x*scale, oy + track[0].y*scale);
+  for (let i = 1; i < SAMPLES; i += 5) ctx.lineTo(ox + track[i].x*scale, oy + track[i].y*scale);
+  ctx.closePath();
+  ctx.stroke();
+  for (const k of karts) {
+    ctx.fillStyle = k.color;
+    ctx.beginPath();
+    ctx.arc(ox + k.x*scale, oy + k.y*scale, k.isPlayer ? 4 : 3, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// ---------- Main loop ----------
+function loop() {
+  update();
+  if (karts.length > 0) {
+    drawTrack();
+  } else {
+    ctx.fillStyle = '#2d5a27';
+    ctx.fillRect(0, 0, W, H);
+  }
+  requestAnimationFrame(loop);
+}
+
+document.getElementById('startBtn').addEventListener('click', initRace);
+document.getElementById('restartBtn').addEventListener('click', initRace);
+loop();
+</script>
+</body>
+</html>
